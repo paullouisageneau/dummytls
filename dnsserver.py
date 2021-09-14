@@ -21,12 +21,12 @@ from dnslib.proxy import ProxyResolver
 from dnslib.server import DNSServer, DNSLogger
 
 import httpserver
-import confs 
+import confs
 
 handler = logging.StreamHandler()
 handler.setLevel(logging.INFO)
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
-logger = logging.getLogger('localtls')
+logger = logging.getLogger('dummytls')
 logger.addHandler(handler)
 
 TYPE_LOOKUP = {
@@ -104,11 +104,11 @@ class Resolver(ProxyResolver):
         global TXT_RECORDS
         reply = request.reply()
         name = request.q.qname
-        
+
         logger.info("query %s", request.q.qname)
 
         # handle the main domain
-        if (name == confs.BASE_DOMAIN or 
+        if (name == confs.BASE_DOMAIN or
             name == '_acme-challenge.' + confs.BASE_DOMAIN
         ):
             r = RR(
@@ -205,7 +205,7 @@ class Resolver(ProxyResolver):
                     reply.add_answer(r)
                 else:
                     return reply
-            
+
                 logger.info('found zone for %s, %d replies', request.q.qname, len(reply.rr))
             return reply
         elif self.address == "":
@@ -238,7 +238,7 @@ def messageListener():
             conn.close()
         except Exception as e:
             logger.error(e)
-            if conn: 
+            if conn:
                 conn.close()
             pass
     listener.close()
@@ -335,7 +335,7 @@ def main():
     confs.SOA_RNAME = args.soa_email
     if not confs.SOA_MNAME or not confs.SOA_RNAME:
         logger.error('Setting SOA is strongly recommended')
-        
+
     if args.ns_servers:
         confs.NS_SERVERS=args.ns_servers.split(',')
 

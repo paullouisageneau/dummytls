@@ -9,7 +9,7 @@ import logging
 
 INDEX_HTML='<html><body>Hi.</body></html>'
 CERT_PATH='/etc/letsencrypt/live/' + confs.BASE_DOMAIN
-logger = logging.getLogger('localtls')
+logger = logging.getLogger('dummytls')
 
 class Root(object):
     @cherrypy.expose
@@ -58,7 +58,7 @@ def listCertificates():
             current_domain = domains
         elif line.find('Certificate Path') > -1:
             p = line.split(':')[1].strip()
-            paths[domains] = os.path.dirname(p) 
+            paths[domains] = os.path.dirname(p)
     return paths
 
 def force_tls(self=None):
@@ -73,7 +73,7 @@ def run(port, index, certpath=''):
             INDEX_HTML=bytes(f.read(), "utf8")
     except:
         pass
-    
+
     # get certificates
     try:
         paths = listCertificates()
@@ -85,7 +85,7 @@ def run(port, index, certpath=''):
     except:
         logger.critical("Cannot list certificates: {}. Is certbot installed?".format(sys.exc_info()[0]))
         #return
-    
+
     cherrypy.config.update({
         'log.screen': False,
         'log.access_file': '',
@@ -94,7 +94,7 @@ def run(port, index, certpath=''):
         'server.socket_host': '::',
         'server.socket_port': int(port)
     })
-    
+
     if port == 443 and confs.BASE_DOMAIN in paths:
         logger.info('Starting TLS server.')
         cert = paths[confs.BASE_DOMAIN]

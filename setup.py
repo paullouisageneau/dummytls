@@ -2,11 +2,9 @@
 
 from distutils.core import setup
 
-setup(name='localtls',
+setup(name='dummytls',
       version='1.0.8',
-      description='DNS server for local TLS',
-      author='Corollarium',
-      author_email='email@corollarium.com',
-      url='https://github.com/Corollarium/localtls',
-     )
-
+      description='DNS server for dummy TLS',
+      author='Corollarium, Paul-Louis Ageneau',
+      url='https://github.com/paullouisageneau/dummytls',
+)
