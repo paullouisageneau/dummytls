@@ -1,5 +1,3 @@
-#-*- coding: utf-8 -*-
-
 import os
 import sys
 import cherrypy
@@ -8,8 +6,8 @@ import logging
 
 from . import confs
 
-INDEX_HTML='<html><body>Hi.</body></html>'
-CERT_PATH='/etc/letsencrypt/live/' + confs.BASE_DOMAIN
+INDEX_HTML = '<html><body>Hi.</body></html>'
+CERT_PATH = '/etc/letsencrypt/live/' + confs.BASE_DOMAIN
 logger = logging.getLogger('dummytls')
 
 
@@ -35,7 +33,7 @@ class Root(object):
             cherrypy.log(str(e))
         except FileNotFoundError as e:
             cherrypy.log(str(e))
-        except:
+        except Exception:
             cherrypy.log("Unexpected error:", sys.exc_info()[0])
         return {'privkey': privkey, 'cert': cert, 'chain': chain, 'fullchain': fullchain}
 
@@ -45,14 +43,12 @@ class Root(object):
 
 
 def listCertificates():
-    command = [
-        'certbot', 'certificates'
-    ]
+    command = ['certbot', 'certificates']
     output = subprocess.Popen(command, stdout=subprocess.PIPE, bufsize=1, universal_newlines=True)
     current_certificate = ''
     current_domain = ''
     paths = {}
-    for line in iter(output.stdout.readline,''):
+    for line in iter(output.stdout.readline, ''):
         if line.find('Certificate Name') > -1:
             current_certificate = line.split(':')[1].strip()
             continue
@@ -76,7 +72,7 @@ def run(port, index, certpath=''):
     try:
         with open(index) as f:
             INDEX_HTML = bytes(f.read(), "utf8")
-    except:
+    except Exception:
         pass
 
     # get certificates
@@ -87,9 +83,9 @@ def run(port, index, certpath=''):
         else:
             logger.critical("Cannot find wildcard certificate. Run certbotdns.py now and then restart this. Meanwhile HTTP will not work.")
             return
-    except:
+    except Exception:
         logger.critical("Cannot list certificates: {}. Is certbot installed?".format(sys.exc_info()[0]))
-        #return
+        # return
 
     cherrypy.config.update({
         'log.screen': False,

@@ -1,8 +1,4 @@
-#!/usr/bin/env python3.6
-# -*- coding: utf-8 -*-
-
 import logging
-import socket
 import ipaddress
 
 import dnslib
@@ -11,11 +7,7 @@ from dnslib.proxy import ProxyResolver
 
 from . import confs
 
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
-handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 logger = logging.getLogger('dummytls')
-logger.addHandler(handler)
 
 TYPE_LOOKUP = {
     'A': (dns.A, QTYPE.A),
@@ -35,13 +27,14 @@ TYPE_LOOKUP = {
 
 TXT_RECORDS = {}
 
+
 class Resolver(ProxyResolver):
     def __init__(self, upstream):
         super().__init__(upstream, 53, 5)
         if confs.SOA_MNAME and confs.SOA_RNAME:
             self.SOA = dnslib.SOA(
                 mname=DNSLabel(confs.SOA_MNAME),
-                rname=DNSLabel(confs.SOA_RNAME.replace('@', '.')), # TODO: . before @ should be escaped
+                rname=DNSLabel(confs.SOA_RNAME.replace('@', '.')),  # TODO: . before @ should be escaped
                 times=(
                     confs.SOA_SERIAL,  # serial number
                     60 * 60 * 1,  # refresh
@@ -117,6 +110,7 @@ class Resolver(ProxyResolver):
                 )
                 reply.add_answer(r)
             return reply
+
         # handle subdomains
         elif self.match_suffix_insensitive(request):
             labelstr = str(request.q.qname)
@@ -127,12 +121,12 @@ class Resolver(ProxyResolver):
                 ip = None
                 try:
                     ip = ipaddress.ip_address(subdomains[0].replace('-', '.'))
-                except:
+                except Exception:
                     pass
                 try:
                     if ip is None:
                         ip = ipaddress.ip_address(subdomains[0].replace('-', ':'))
-                except:
+                except Exception:
                     logger.info('invalid ip %s', labelstr)
                     return reply
 
