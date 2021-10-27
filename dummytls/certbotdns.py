@@ -15,12 +15,12 @@ BASE_PATH=os.path.realpath(__file__)
 CERTBOT_DOMAIN=os.getenv('CERTBOT_DOMAIN')
 CERTBOT_VALIDATION=os.getenv('CERTBOT_VALIDATION')
 
-from multiprocessing.connection import Client
-
 address = ('localhost', 6000)
+
 
 def help():
     print("Command: renovate [domain] [email]\n")
+
 
 if len(sys.argv) == 1:
     help()

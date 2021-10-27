@@ -2,14 +2,16 @@
 
 import os
 import sys
-import confs
 import cherrypy
 import subprocess
 import logging
 
+from . import confs
+
 INDEX_HTML='<html><body>Hi.</body></html>'
 CERT_PATH='/etc/letsencrypt/live/' + confs.BASE_DOMAIN
 logger = logging.getLogger('dummytls')
+
 
 class Root(object):
     @cherrypy.expose
@@ -41,6 +43,7 @@ class Root(object):
     def favicon_ico(self):
         raise cherrypy.HTTPError(404)
 
+
 def listCertificates():
     command = [
         'certbot', 'certificates'
@@ -61,16 +64,18 @@ def listCertificates():
             paths[domains] = os.path.dirname(p)
     return paths
 
+
 def force_tls(self=None):
     # check if url is in https and redirect if http
     if cherrypy.request.scheme == "http":
         raise cherrypy.HTTPRedirect(cherrypy.url().replace("http:", "https:"), status=301)
 
+
 def run(port, index, certpath=''):
     global INDEX_HTML, CERT_PATH
     try:
         with open(index) as f:
-            INDEX_HTML=bytes(f.read(), "utf8")
+            INDEX_HTML = bytes(f.read(), "utf8")
     except:
         pass
 

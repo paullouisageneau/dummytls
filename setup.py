@@ -7,4 +7,5 @@ setup(name='dummytls',
       description='DNS server for dummy TLS',
       author='Corollarium, Paul-Louis Ageneau',
       url='https://github.com/paullouisageneau/dummytls',
+      packages=['dummytls']
 )
