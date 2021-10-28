@@ -37,10 +37,10 @@ class Resolver(ProxyResolver):
                 rname=DNSLabel(confs.SOA_RNAME.replace('@', '.')),  # TODO: . before @ should be escaped
                 times=(
                     confs.SOA_SERIAL,  # serial number
-                    60 * 60 * 1,  # refresh
-                    60 * 60 * 2,  # retry
+                    60 * 60 * 1,   # refresh
+                    60 * 60 * 2,   # retry
                     60 * 60 * 24,  # expire
-                    60 * 60 * 1,  # minimum
+                    60 * 60 * 1,   # minimum
                 )
             )
         else:
@@ -59,10 +59,10 @@ class Resolver(ProxyResolver):
 
     def resolve(self, request, handler):
         global TXT_RECORDS
-        reply = request.reply()
-        name = request.q.qname
+        logger.info("Query %s", request.q.qname)
 
-        logger.info("query %s", request.q.qname)
+        reply = request.reply()
+        name = str(request.q.qname).lower()
 
         # handle the main domain
         if name == confs.BASE_DOMAIN or name == '_acme-challenge.' + confs.BASE_DOMAIN:
@@ -114,7 +114,7 @@ class Resolver(ProxyResolver):
         # handle subdomains
         elif self.match_suffix_insensitive(request):
             labelstr = str(request.q.qname)
-            logger.info("requestx: %s, %s", labelstr, confs.ONLY_PRIVATE_IPS)
+            logger.info("Requestx: %s, %s", labelstr, confs.ONLY_PRIVATE)
 
             subdomains = labelstr.split('.')
             if len(subdomains) == 4:  # TODO: dynamic
@@ -127,13 +127,13 @@ class Resolver(ProxyResolver):
                     if ip is None:
                         ip = ipaddress.ip_address(subdomains[0].replace('-', ':'))
                 except Exception:
-                    logger.info('invalid ip %s', labelstr)
+                    logger.info('Invalid IP address: %s', labelstr)
                     return reply
 
                 # check if we only want private ips
-                if not ip.is_private and confs.ONLY_PRIVATE_IPS:
+                if not ip.is_private and confs.ONLY_PRIVATE:
                     return reply
-                if ip.is_reserved and confs.NO_RESERVED_IPS:
+                if ip.is_reserved and confs.NO_RESERVED:
                     return reply
                 # check if it's a valid ip for a machine
                 if ip.is_multicast or ip.is_unspecified:
@@ -141,7 +141,7 @@ class Resolver(ProxyResolver):
 
                 if type(ip) == ipaddress.IPv4Address:
                     ipv4 = subdomains[0].replace('-', '.')
-                    logger.info("ip is ipv4 %s", ipv4)
+                    logger.info("IP address is IPv4 %s", ipv4)
                     r = RR(
                         rname=request.q.qname,
                         rdata=dns.A(ipv4),
@@ -151,7 +151,7 @@ class Resolver(ProxyResolver):
                     reply.add_answer(r)
                 elif type(ip) == ipaddress.IPv6Address:
                     ipv6 = subdomains[0].replace('-', ':')
-                    logger.info("ip is ipv6 %s", ipv6)
+                    logger.info("IP address is IPv6 %s", ipv6)
                     r = RR(
                         rname=request.q.qname,
                         rdata=dns.AAAA(ipv6),
@@ -162,8 +162,9 @@ class Resolver(ProxyResolver):
                 else:
                     return reply
 
-                logger.info('found zone for %s, %d replies', request.q.qname, len(reply.rr))
+                logger.info('Found zone for %s, %d replies', request.q.qname, len(reply.rr))
             return reply
+
         elif self.address == "":
             return reply
 

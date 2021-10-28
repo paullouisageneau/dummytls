@@ -3,11 +3,12 @@ import sys
 import cherrypy
 import subprocess
 import logging
+import time
 
 from . import confs
 
-INDEX_HTML = '<html><body>Hi.</body></html>'
-CERT_PATH = '/etc/letsencrypt/live/' + confs.BASE_DOMAIN
+INDEX_HTML = '<html><body></body></html>'
+CERT_PATH = ''
 logger = logging.getLogger('dummytls')
 
 
@@ -21,6 +22,9 @@ class Root(object):
     def keys(self):
         privkey = cert = chain = fullchain = ''
         try:
+            if not CERT_PATH:
+                raise FileNotFoundError('Missing certificate path')
+
             with open(os.path.join(CERT_PATH, 'cert.pem')) as f:
                 cert = f.read()
             with open(os.path.join(CERT_PATH, 'chain.pem')) as f:
@@ -44,7 +48,11 @@ class Root(object):
 
 def listCertificates():
     command = ['certbot', 'certificates']
-    output = subprocess.Popen(command, stdout=subprocess.PIPE, bufsize=1, universal_newlines=True)
+    output = subprocess.Popen(command,
+                              stdout=subprocess.PIPE,
+                              stderr=subprocess.DEVNULL,
+                              bufsize=1,
+                              universal_newlines=True)
     current_certificate = ''
     current_domain = ''
     paths = {}
@@ -75,17 +83,23 @@ def run(port, index, certpath=''):
     except Exception:
         pass
 
+    naked_domain = confs.BASE_DOMAIN
+    wildcard_domain = '*.' + confs.BASE_DOMAIN
+
     # get certificates
     try:
         paths = listCertificates()
-        if ('*.' + confs.BASE_DOMAIN) in paths:
-            CERT_PATH = paths['*.' + confs.BASE_DOMAIN]
-        else:
-            logger.critical("Cannot find wildcard certificate. Run certbotdns.py now and then restart this. Meanwhile HTTP will not work.")
-            return
+        if naked_domain not in paths and wildcard_domain not in paths:
+            logger.warn("Missing certificates, the HTTP server will only be started after renewal")
+            while naked_domain not in paths and wildcard_domain not in paths:
+                time.sleep(10)
+                paths = listCertificates()
+
+        CERT_PATH = paths[wildcard_domain]
+
     except Exception:
         logger.critical("Cannot list certificates: {}. Is certbot installed?".format(sys.exc_info()[0]))
-        # return
+        return
 
     cherrypy.config.update({
         'log.screen': False,
@@ -96,9 +110,9 @@ def run(port, index, certpath=''):
         'server.socket_port': int(port)
     })
 
-    if port == 443 and confs.BASE_DOMAIN in paths:
+    if port == 443 and naked_domain in paths:
         logger.info('Starting TLS server.')
-        cert = paths[confs.BASE_DOMAIN]
+        cert = paths[naked_domain]
         cherrypy.tools.force_tls = cherrypy.Tool("before_handler", force_tls)
         cherrypy.config.update({
             'server.ssl_module': 'builtin',

@@ -1,15 +1,15 @@
-import json
-import logging
 import os
 import sys
+import json
+import logging
 import signal
 import socket
 import argparse
 import ipaddress
 import threading
+import subprocess
 from time import sleep
-from multiprocessing.connection import Listener
-
+from multiprocessing.connection import Listener, Client
 from dnslib.server import DNSServer, DNSLogger
 
 from . import dnsserver
@@ -21,6 +21,10 @@ handler.setLevel(logging.INFO)
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 logger = logging.getLogger('dummytls')
 logger.addHandler(handler)
+
+BASE_PATH = os.path.realpath(__file__)
+LOCAL_ADDRESS = ('localhost', 6000)
+SECRET_KEY = os.getenv('SECRET_KEY', b'secret')
 
 
 def get_ipv4():
@@ -46,20 +50,17 @@ def handle_sig(signum, frame):
     exit(0)
 
 
-# this is used to hear for new TXT records from the certbotdns script. We need to get them ASAP to
-# validate the certbot request.
+# this is used to hear for new TXT records from user commands
 def messageListener():
     global TXT_RECORDS
-    address = ('localhost', 6000)  # family is deduced to be 'AF_INET'
-    key = os.getenv('KEY', b'secret')  # not very secret, but we're bound to localhost.
-    listener = Listener(address, authkey=key)
+    listener = Listener(LOCAL_ADDRESS, authkey=SECRET_KEY)
     while True:
         conn = None
         try:
             conn = listener.accept()
             msg = conn.recv()
             # do something with msg
-            msg = json.loads(msg, encoding='utf-8')
+            msg = json.loads(msg)
             if msg['command'] == 'ADDTXT':
                 TXT_RECORDS[msg['key']] = msg['val']
             elif msg['command'] == 'REMOVETXT':
@@ -73,62 +74,60 @@ def messageListener():
     listener.close()
 
 
-def main():
-    signal.signal(signal.SIGTERM, handle_sig)
-
-    parser = argparse.ArgumentParser(prog='dummytls', description='DummyTLS')
+def run(raw_args):
+    parser = argparse.ArgumentParser(prog='dummytls run', description='Run DummyTLS server')
     parser.add_argument(
         '--domain',
         required=True,
-        help="Your domain or subdomain."
+        help="The domain or subdomain"
     )
     parser.add_argument(
         '--soa-master',
-        help="Primary master name server for SOA record. You should fill this."
+        help="Primary master name server for SOA record (Default: none)"
     )
     parser.add_argument(
         '--soa-email',
-        help="Email address for administrator for SOA record. You should fill this."
+        help="Administrator e-mail address for SOA record (Default: none)"
     )
     parser.add_argument(
         '--ns-servers',
-        help="List of ns servers, separated by comma"
+        help="List of ns servers, separated by comma (Default: none)"
     )
     parser.add_argument(
         '--dns-port',
         default=53,
-        help="DNS server port"
+        help="DNS server port (Default: 53)"
     )
     parser.add_argument(
         '--domain-ipv4',
         default='',
-        help="The IPv4 for the naked domain. If empty, use this machine's."
+        help="The IPv4 for the naked domain (Default: local IPv4 address)"
     )
     parser.add_argument(
         '--domain-ipv6',
         default='',
-        help="The IPv6 for the naked domain. If empty, use this machine's."
+        help="The IPv6 for the naked domain (Default: local IPv6 address)"
     )
     parser.add_argument(
-        '--only-private-ips',
+        '--only-private',
         action='store_true',
         default=False,
-        help="Resolve only IPs in private ranges."
+        help="If true, resolve only private IP addresses"
     )
     parser.add_argument(
-        '--no-reserved-ips',
+        '--no-reserved',
         action='store_true',
         default=False,
-        help="If true ignore ips that are reserved."
+        help="If true, ignore reserved IP addresses"
     )
     parser.add_argument(
         '--dns-fallback',
-        default='1.1.1.1',
-        help="DNS fallback server. Default: 1.1.1.1"
+        default='9.9.9.9',
+        help="DNS fallback server (Default: 9.9.9.9)"
     )
     parser.add_argument(
         '--http-port',
-        help="HTTP server port. If not set, no HTTP server is started"
+        help="HTTP server port (Default: disabled)"
     )
     parser.add_argument(
         '--http-index-file',
@@ -137,37 +136,44 @@ def main():
     )
     parser.add_argument(
         '--log-level',
-        default='ERROR',
-        help="INFO|WARNING|ERROR|DEBUG"
+        default='WARNING',
+        help="The log level: DEBUG|INFO|WARNING|ERROR (Default: WARNING)"
     )
-    args = parser.parse_args()
+    args = parser.parse_args(raw_args)
 
+    signal.signal(signal.SIGTERM, handle_sig)
     logger.setLevel(args.log_level)
+
+    confs.BASE_DOMAIN = args.domain
+    if not confs.BASE_DOMAIN:
+        logger.critical('Invalid domain: "%s"', confs.BASE_DOMAIN)
+        sys.exit(1)
 
     confs.LOCAL_IPV4 = args.domain_ipv4 if args.domain_ipv4 else get_ipv4()
     confs.LOCAL_IPV6 = args.domain_ipv6 if args.domain_ipv6 else get_ipv6()
     try:
         ipaddress.ip_address(confs.LOCAL_IPV4)
     except Exception:
-        logger.critical('Invalid IPv4 %s', confs.LOCAL_IPV4)
+        logger.critical('Invalid IPv4: "%s"', confs.LOCAL_IPV4)
         sys.exit(1)
     try:
         if confs.LOCAL_IPV6:
             ipaddress.ip_address(confs.LOCAL_IPV6)
     except Exception:
-        logger.critical('Invalid IPv6 %s', confs.LOCAL_IPV6)
+        logger.critical('Invalid IPv6: "%s"', confs.LOCAL_IPV6)
         sys.exit(1)
 
-    confs.ONLY_PRIVATE_IPS = args.only_private_ips
-    confs.NO_RESERVED_IPS = args.no_reserved_ips
-    confs.BASE_DOMAIN = args.domain
     confs.SOA_MNAME = args.soa_master
     confs.SOA_RNAME = args.soa_email
     if not confs.SOA_MNAME or not confs.SOA_RNAME:
-        logger.error('Setting SOA is strongly recommended')
+        logger.error('Setting SOA master and email is strongly recommended to be compliant wth RFC 1035')
 
-    if args.ns_servers:
-        confs.NS_SERVERS = args.ns_servers.split(',')
+    confs.NS_SERVERS = args.ns_servers.split(',') if args.ns_servers else []
+    if not confs.NS_SERVERS:
+        logger.error('Setting NS servers is strongly recommended to be compliant with RFC 1035')
+
+    confs.ONLY_PRIVATE = args.only_private
+    confs.NO_RESERVED = args.no_reserved
 
     # handle local messages to add TXT records
     threadMessage = threading.Thread(target=messageListener)
@@ -185,7 +191,7 @@ def main():
     udp_server = DNSServer(resolver, port=port, logger=dnslogger)
     tcp_server = DNSServer(resolver, port=port, tcp=True, logger=dnslogger)
 
-    logger.critical('starting DNS server on port %d, upstream DNS server "%s"',
+    logger.critical('Starting DNS server on port %d, upstream DNS server "%s"',
                     port,
                     upstream)
     udp_server.start_thread()
@@ -207,5 +213,68 @@ def main():
         pass
 
 
+def renew(raw_args):
+    parser = argparse.ArgumentParser(prog='dummytls renew', description='Renew certificate')
+    parser.add_argument(
+        '--domain',
+        required=True,
+        help="The domain or subdomain"
+    )
+    parser.add_argument(
+        '--email',
+        required=True,
+        help="Administrator e-mail address"
+    )
+    args = parser.parse_args(raw_args)
+
+    if not args.domain:
+        logger.critical('Invalid domain: "%s"', args.domain)
+        sys.exit(1)
+
+    if not args.email and '@' not in args.email:
+        logger.critical('Invalid e-mail: "%s"', args.email)
+        sys.exit(1)
+
+    naked_domain = args.domain
+    wildcard_domain = '*.' + args.domain
+
+    for domain in naked_domain, wildcard_domain:
+        script = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'certbot.py')
+        command = [
+            'certbot', 'certonly', '--noninteractive',  # TEST: '--test-cert',
+            '--agree-tos', '--email', args.email,
+            '--manual', '--preferred-challenges=dns', '--manual-public-ip-logging-ok',
+            '--manual-auth-hook', 'python3 {} deploy'.format(script),
+            '--manual-cleanup-hook', 'python3 {} cleanup'.format(script),
+            '-d', domain
+        ]
+        output = subprocess.run(command)
+        print(output.stdout)
+        print(output.stderr)
+        output.check_returncode()
+
+
+def help():
+    print("usage: dummytls [run|wildcard|naked] [args...]\n")
+
+
+def main():
+    if len(sys.argv) == 1:
+        help()
+        sys.exit(1)
+
+    if sys.argv[1] == 'help' or sys.argv[1] == '--help' or sys.argv[1] == '-h':
+        help()
+        sys.exit(0)
+
+    if sys.argv[1] == 'run':
+        run(sys.argv[2:])
+    elif sys.argv[1] == 'renew':
+        renew(sys.argv[2:])
+    else:
+        help()
+        sys.exit(1)
+
+
 if __name__ == '__main__':
-     main()
+    main()

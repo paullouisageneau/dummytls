@@ -40,83 +40,101 @@ The second: you need not only a secure context for the browser, but actual safet
 
 1. Get a server. It doesn't need to be big. Ideally you should have at least one slave, too, because NS entries require at least two servers.
 1. Point the NS entry of your domain to this server.
-1. [Install dependencies](#base-installation-and-deps).
-1. [Run dnsserver.py](#running-the-dns-server).
-1. [Create the certificates running certbotdns.py](#renewing-keys).
+1. [Installing](#install).
+1. [Running the server](#run-the-server).
+1. [Obtaining certificates](#obtain-certificates).
 
-## Base installation and deps
+## Installing
 
-You essentially need Python 3.6 or above, certbot and the dnslib and cherrypy PIPs.
+### Virtual environment
 
-## Running the DNS server
-
-You probably want to start dnsserver in production like this:
-
+First, make sure the Let's Encrypt client `certbot` is installed. Then, you should setup a virtual environment:
 ```
-python3 dnsserver.py --domain yourdomain.net --soa-master=ns1.yourdomain.net --soa-email=email@yourdomain.net --ns-servers=ns1.yourdomain.net,ns2.yourdomain.net --log-level ERROR --http-port 80 --http-index /somewhere/index.html
+$ virtualenv env
+$ source env/bin/activate
+$ pip install -r requirements.txt
 ```
 
-Run `python3 dnsserver.py --help` for a list of arguments.
+### Docker
 
-* `--domain`: REQUIRED. Your domain or subdomain.
-* `--soa-master`: STRONGLY RECOMMENDED. Primary master name server for SOA record. You should fill this to be compliant to RFC 1035.
-* `--soa-email`: STRONGLY RECOMMENDED. Email address for administrator for SOA record. You should fill this to be compliant to RFC 1035.
-* `--ns-servers`: STRONGLY RECOMMENDED. The list of nameservers, separated by commas, for the NS record.
-* `--dns-port`: DNS server port. Defaults to 53. You need to be root on linux to run this on a port < 1024.
-* `--dns-fallback`: The DNS fallback server. This server can be used as full DNS resolver in your network, falling back to this server.
-* `--domain-ipv4`: The ipv4 for the naked domain. Defaults to the server IPV4.
-* `--domain-ipv6`: The ipv6 for the naked domain. Defaults to the server IPV6.
-* `--http-port`: the HTTP server port. If not set, no HTTP server is started. The HTTP server is used to serve a index.html for the `/` location and the `/keys` with the keys.
-* `--http-index-file`: path to the HTTP index html. We don't serve assets. The file is read upon start and cached.
-* `--log-level`: INFO|WARNING|ERROR|DEBUG. You should run on ERROR level in production.
-* `--only-private-ips`: Only resolve private ips.
-* `--no-reserved-ips`: Don't resolve reserved ips.
+Alternatively, a `Dockerfile` is available to build a container:
+```
+$ docker build .
+```
 
+Then you can run dummytls as follows:
+```
+$ docker run --network host [container] run --domain yourdomain.net [...]
+```
 
-This software uses port 6000 for internal communication. It is bound to 127.0.0.1.
+Using network `host` is not mandatory, however if you don't, you must specify the `--domain-ipv4` and `--domain-ipv6` options.
 
-## Slave DNS server
-
-To run a secondary NS server, we suggest run dnsserver.py without a HTTP server. Remember to set `--domain-ipv4` and `--domain-ipv6` pointing to the master server. Do not run certbotdns.py on the slave servers.
-
-### Testing
+## Testing locally
 
 Run locally like this for a minimal test at port 5300:
 
 ```
-python3 dnsserver.py --domain=yourdomain.net --dns-port=5300
+$ python -m dummytls run --domain=yourdomain.net --dns-port=5300
 ```
 
 Run dig to test:
 
 ```
-dig @localhost -p 5300 +nocmd 192-168-0-255.yourdomain.net ANY +multiline +noall +answer
+$ dig @localhost -p 5300 +nocmd 192-168-0-255.yourdomain.net ANY +multiline +noall +answer
 ```
 
-## Renewing keys
+## Running the server
+
+You probably want to run the server in production like this:
+
+```
+$ python -m dummytls run --domain yourdomain.net --soa-master=ns1.yourdomain.net --soa-email=email@yourdomain.net --ns-servers=ns1.yourdomain.net,ns2.yourdomain.net --log-level ERROR --http-port 80 --http-index /somewhere/index.html
+```
+
+Run `python -m dummytls run --help` for a list of arguments.
+
+* `--domain`: The domain or subdomain (REQUIRED)
+* `--soa-master`: Primary master name server for SOA record (STRONGLY RECOMMENDED)
+* `--soa-email`: E-mail address for SOA record (STRONGLY RECOMMENDED)
+* `--ns-servers`: Comma-separated list of nameservers for NS records (STRONGLY RECOMMENDED)
+* `--dns-port`: DNS server port (default 53, note you need to be root on linux to run this on a port below 1024.)
+* `--dns-fallback`: Fallback DNS server
+* `--domain-ipv4`: IPv4 address for the naked domain (default local IPV4 address)
+* `--domain-ipv6`: IPv6 address for the naked domain (default local IPv6 address)
+* `--http-port`: HTTP server port (If not set, no HTTP server is started. It serves an index.html on `/` and the keys on `/keys`.)
+* `--http-index-file`: Path to the HTTP index.html file (The file is read on start and cached.)
+* `--log-level`: The log level: DEBUG|INFO|WARNING|ERROR
+* `--only-private`: Only resolve private IP addresses
+* `--no-reserved`: Don't resolve reserved IP addresses
+
+This software uses port 6000 for internal communication. It is bound to 127.0.0.1.
+
+To run a secondary DNS server, do the same without `--http-port`. Remember to set `--domain-ipv4` and `--domain-ipv6` pointing to the master server. You don't need certificates on the secondary server.
+
+## Obtaining the certificates
 
 You should renew keys once a month, according to the recommendation of Let's Encrypt. Run this with the proper domain:
 
 ```
-python3 certbotdns.py wildcard yourdomain.net email@yourdomain.net
+$ python -m dummytls wildcard yourdomain.net email@yourdomain.net
 ```
 
 If you wish to generate a certificate for the naked domain
 ```
-python3 certbotdns.py naked yourdomain.net email@yourdomain.net
+$ python -m dummytls naked yourdomain.net email@yourdomain.net
 ````
 
 Here's a cron line to run it monthly:
 
 ```
-0 0 1 * * python3 /path/to/certbotdns.py wildcard yourdomain.net email@yourdomain.net; python3 /path/to/certbotdns.py naked yourdomain.net email@yourdomain.net
+0 0 1 * * python -m /path/to/dummytls wildcard yourdomain.net email@yourdomain.net; python -m /path/to/dummytls naked yourdomain.net email@yourdomain.net
 ```
 
 # Using this in your webservice
 
 You should fetch the keys remotely before you open your webservice. Keys are valid for three months, but renewed every month. If your service runs continuously for longer than that you should either restart the service or make it poll and replace the keys every 24h or so.
 
-First, make sure you run with `--http-port`. Make a REST GET rest for `[DOMAIN]/keys` and you'll get a JSON with the following keys:
+First, make sure you run with `--http-port`. Make an HTTP GET request on `yourdomain.net/keys` and you'll get a JSON with the following key:
 
 * `privkey`: the private key.
 * `cert`: the public certificate.
