@@ -64,7 +64,7 @@ $ docker build .
 
 Then you can run dummytls as follows:
 ```
-$ docker run --network host [container] run --domain yourdomain.net [...]
+$ docker run --network host [container] dummytls run --domain yourdomain.net [...]
 ```
 
 Using network `host` is not mandatory, however if you don't, you must specify the `--domain-ipv4` and `--domain-ipv6` options.
