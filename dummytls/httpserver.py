@@ -53,16 +53,12 @@ def listCertificates():
                               stderr=subprocess.DEVNULL,
                               bufsize=1,
                               universal_newlines=True)
-    current_certificate = ''
-    current_domain = ''
     paths = {}
     for line in iter(output.stdout.readline, ''):
         if line.find('Certificate Name') > -1:
-            current_certificate = line.split(':')[1].strip()
             continue
         elif line.find('Domains') > -1:
             domains = line.split(':')[1].strip()
-            current_domain = domains
         elif line.find('Certificate Path') > -1:
             p = line.split(':')[1].strip()
             paths[domains] = os.path.dirname(p)
@@ -110,8 +106,9 @@ def run(port, index, certpath=''):
         'server.socket_port': int(port)
     })
 
+    logger.info('Starting HTTP server')
+
     if port == 443 and naked_domain in paths:
-        logger.info('Starting TLS server.')
         cert = paths[naked_domain]
         cherrypy.tools.force_tls = cherrypy.Tool("before_handler", force_tls)
         cherrypy.config.update({
@@ -128,5 +125,4 @@ def run(port, index, certpath=''):
         server.socket_port = 80
         server.subscribe()
 
-    logger.info('Starting HTTP server.')
     cherrypy.quickstart(Root(), '/')

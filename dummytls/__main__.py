@@ -217,14 +217,12 @@ def renew(raw_args):
         command = [
             'certbot', 'certonly', '--noninteractive',  # TEST: '--test-cert',
             '--agree-tos', '--email', args.email,
-            '--manual', '--preferred-challenges=dns', '--manual-public-ip-logging-ok',
+            '--manual', '--preferred-challenges=dns',
             '--manual-auth-hook', 'python3 {} deploy'.format(script),
             '--manual-cleanup-hook', 'python3 {} cleanup'.format(script),
             '-d', domain
         ]
         output = subprocess.run(command)
-        print(output.stdout)
-        print(output.stderr)
         output.check_returncode()
 
 
