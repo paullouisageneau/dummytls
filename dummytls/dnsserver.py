@@ -75,21 +75,24 @@ class Resolver(ProxyResolver):
         else:
             self.NS = []
 
+    def match_domain_insensitive(self, request):
+        name = request.q.qname
+        domain = str(name)[:-1].lower()  # skip the last dot
+        return domain == confs.BASE_DOMAIN or domain == '_acme-challenge.' + confs.BASE_DOMAIN
+
     def match_suffix_insensitive(self, request):
         name = request.q.qname
-        # skip the last dot
-        suffixLower = str(name)[-len(confs.BASE_DOMAIN)-1:-1].lower()
-        return suffixLower == confs.BASE_DOMAIN
+        suffix = str(name)[-len(confs.BASE_DOMAIN)-1:-1].lower()  # skip the last dot
+        return suffix == confs.BASE_DOMAIN
 
     def resolve(self, request, handler):
         global TXT_RECORDS
-        logger.info("Query %s", request.q.qname)
+        logger.info("Query: %s", request.q.qname)
 
         reply = request.reply()
-        name = str(request.q.qname).lower()
 
         # handle the main domain
-        if name == confs.BASE_DOMAIN or name == '_acme-challenge.' + confs.BASE_DOMAIN:
+        if self.match_domain_insensitive(request):
             r = RR(
                 rname=request.q.qname,
                 rdata=dns.A(confs.LOCAL_IPV4),
@@ -137,10 +140,8 @@ class Resolver(ProxyResolver):
 
         # handle subdomains
         elif self.match_suffix_insensitive(request):
-            labelstr = str(request.q.qname)
-            logger.info("Requestx: %s, %s", labelstr, confs.ONLY_PRIVATE)
-
-            subdomains = labelstr.split('.')
+            name = str(request.q.qname)
+            subdomains = name.split('.')
             if len(subdomains) == 4:  # TODO: dynamic
                 ip = None
                 try:
@@ -151,7 +152,7 @@ class Resolver(ProxyResolver):
                     if ip is None:
                         ip = ipaddress.ip_address(subdomains[0].replace('-', ':'))
                 except Exception:
-                    logger.info('Invalid IP address: %s', labelstr)
+                    logger.info('Invalid IP address: %s', subdomains[0])
                     return reply
 
                 # check if we only want private ips
