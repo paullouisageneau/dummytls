@@ -1,6 +1,6 @@
 import os
 import sys
-import json
+import time
 import logging
 import signal
 import socket
@@ -8,7 +8,6 @@ import argparse
 import ipaddress
 import threading
 import subprocess
-from time import sleep
 from dnslib.server import DNSServer, DNSLogger
 
 from . import dnsserver
@@ -40,9 +39,9 @@ def get_ipv6():
         return ''
 
 
-def handle_sig(signum, frame):
-    logger.info('pid=%d, got signal: %s, stopping...', os.getpid(), signal.Signals(signum).name)
-    exit(0)
+def handle_signal(signum, frame):
+    logger.info("Got signal %s, stopping...", signal.Signals(signum).name)
+    sys.exit(0)
 
 
 def run(raw_args):
@@ -112,7 +111,7 @@ def run(raw_args):
     )
     args = parser.parse_args(raw_args)
 
-    signal.signal(signal.SIGTERM, handle_sig)
+    signal.signal(signal.SIGTERM, handle_signal)
     logger.setLevel(args.log_level)
 
     confs.BASE_DOMAIN = args.domain
@@ -147,7 +146,7 @@ def run(raw_args):
     confs.NO_RESERVED = args.no_reserved
 
     # handle local messages to add TXT records
-    threadMessage = threading.Thread(target=dnsserver.messageListener)
+    threadMessage = threading.Thread(target=dnsserver.message_listener, daemon=True)
     threadMessage.start()
 
     # open the DNS server
@@ -171,17 +170,21 @@ def run(raw_args):
     # open the HTTP server
     if args.http_port:
         logger.critical('Starting httpd...')
-        threadHTTP = threading.Thread(target=httpserver.run, kwargs={
+        http_thread = threading.Thread(target=httpserver.run, daemon=True, kwargs={
             'port': int(args.http_port),
             'index': args.http_index_file
         })
-        threadHTTP.start()
+        http_thread.start()
 
     try:
         while udp_server.isAlive():
-            sleep(1)
+            time.sleep(1)
+
     except KeyboardInterrupt:
         pass
+
+    udp_server.stop()
+    tcp_server.stop()
 
 
 def renew(raw_args):
@@ -245,6 +248,8 @@ def main():
     else:
         help()
         sys.exit(1)
+
+    sys.exit(0)
 
 
 if __name__ == '__main__':

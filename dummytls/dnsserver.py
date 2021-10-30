@@ -35,7 +35,7 @@ TXT_RECORDS = {}
 
 
 # this is used to hear for new TXT records from user commands
-def messageListener():
+def message_listener():
     global TXT_RECORDS
     with Listener(LOCAL_ADDRESS, authkey=SECRET_KEY) as listener:
         while True:
