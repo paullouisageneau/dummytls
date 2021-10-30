@@ -9,7 +9,6 @@ import ipaddress
 import threading
 import subprocess
 from time import sleep
-from multiprocessing.connection import Listener, Client
 from dnslib.server import DNSServer, DNSLogger
 
 from . import dnsserver
@@ -21,10 +20,6 @@ handler.setLevel(logging.INFO)
 handler.setFormatter(logging.Formatter('%(asctime)s: %(message)s', datefmt='%H:%M:%S'))
 logger = logging.getLogger('dummytls')
 logger.addHandler(handler)
-
-BASE_PATH = os.path.realpath(__file__)
-LOCAL_ADDRESS = ('localhost', 6000)
-SECRET_KEY = os.getenv('SECRET_KEY', b'secret')
 
 
 def get_ipv4():
@@ -48,30 +43,6 @@ def get_ipv6():
 def handle_sig(signum, frame):
     logger.info('pid=%d, got signal: %s, stopping...', os.getpid(), signal.Signals(signum).name)
     exit(0)
-
-
-# this is used to hear for new TXT records from user commands
-def messageListener():
-    global TXT_RECORDS
-    listener = Listener(LOCAL_ADDRESS, authkey=SECRET_KEY)
-    while True:
-        conn = None
-        try:
-            conn = listener.accept()
-            msg = conn.recv()
-            # do something with msg
-            msg = json.loads(msg)
-            if msg['command'] == 'ADDTXT':
-                TXT_RECORDS[msg['key']] = msg['val']
-            elif msg['command'] == 'REMOVETXT':
-                TXT_RECORDS.pop(msg['key'])
-            conn.close()
-        except Exception as e:
-            logger.error(e)
-            if conn:
-                conn.close()
-            pass
-    listener.close()
 
 
 def run(raw_args):
@@ -176,7 +147,7 @@ def run(raw_args):
     confs.NO_RESERVED = args.no_reserved
 
     # handle local messages to add TXT records
-    threadMessage = threading.Thread(target=messageListener)
+    threadMessage = threading.Thread(target=dnsserver.messageListener)
     threadMessage.start()
 
     # open the DNS server

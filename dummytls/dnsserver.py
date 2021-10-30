@@ -1,5 +1,8 @@
+import os
+import json
 import logging
 import ipaddress
+from multiprocessing.connection import Listener
 
 import dnslib
 from dnslib import DNSLabel, QTYPE, RR, dns
@@ -8,6 +11,9 @@ from dnslib.proxy import ProxyResolver
 from . import confs
 
 logger = logging.getLogger('dummytls')
+
+LOCAL_ADDRESS = ('localhost', 6000)
+SECRET_KEY = os.getenv('SECRET_KEY', b'secret')
 
 TYPE_LOOKUP = {
     'A': (dns.A, QTYPE.A),
@@ -26,6 +32,24 @@ TYPE_LOOKUP = {
 }
 
 TXT_RECORDS = {}
+
+
+# this is used to hear for new TXT records from user commands
+def messageListener():
+    global TXT_RECORDS
+    with Listener(LOCAL_ADDRESS, authkey=SECRET_KEY) as listener:
+        while True:
+            try:
+                with listener.accept() as conn:
+                    data = conn.recv()
+                    msg = json.loads(data)
+                    if msg['command'] == 'ADDTXT':
+                        TXT_RECORDS[msg['key']] = msg['val']
+                    elif msg['command'] == 'REMOVETXT':
+                        TXT_RECORDS.pop(msg['key'])
+
+            except Exception as e:
+                logger.error(e)
 
 
 class Resolver(ProxyResolver):
