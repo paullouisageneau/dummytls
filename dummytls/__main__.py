@@ -227,7 +227,7 @@ def renew(raw_args):
 
 
 def help():
-    print("usage: dummytls [run|wildcard|naked] [args...]\n")
+    print("usage: dummytls [run|renew] [args...]\n")
 
 
 def main():
