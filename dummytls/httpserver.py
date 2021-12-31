@@ -6,25 +6,39 @@ import logging
 import time
 
 from . import confs
+from cherrypy.lib.static import serve_file
 
 INDEX_HTML = '<html><body></body></html>'
 CERT_PATH = ''
 logger = logging.getLogger('dummytls')
 
 
-class Root(object):
+class Root:
     @cherrypy.expose
     def index(self):
         return INDEX_HTML
 
     @cherrypy.expose
+    def cert_pem(self):
+        return serve_file(os.path.join(CERT_PATH, 'cert.pem'), content_type='application/x-pem-file')
+
+    @cherrypy.expose
+    def chain_pem(self):
+        return serve_file(os.path.join(CERT_PATH, 'chain.pem'), content_type='application/x-pem-file')
+
+    @cherrypy.expose
+    def fullchain_pem(self):
+        return serve_file(os.path.join(CERT_PATH, 'fullchain.pem'), content_type='application/x-pem-file')
+
+    @cherrypy.expose
+    def privkey_pem(self):
+        return serve_file(os.path.join(CERT_PATH, 'privkey.pem'), content_type='application/x-pem-file')
+
+    @cherrypy.expose
     @cherrypy.tools.json_out()
-    def keys(self):
+    def keys_json(self):
         privkey = cert = chain = fullchain = ''
         try:
-            if not CERT_PATH:
-                raise FileNotFoundError('Missing certificate path')
-
             with open(os.path.join(CERT_PATH, 'cert.pem')) as f:
                 cert = f.read()
             with open(os.path.join(CERT_PATH, 'chain.pem')) as f:
@@ -33,13 +47,18 @@ class Root(object):
                 fullchain = f.read()
             with open(os.path.join(CERT_PATH, 'privkey.pem')) as f:
                 privkey = f.read()
-        except ValueError as e:
-            cherrypy.log(str(e))
         except FileNotFoundError as e:
-            cherrypy.log(str(e))
-        except Exception:
-            cherrypy.log("Unexpected error:", sys.exc_info()[0])
+            logger.warning(str(e))
+            raise cherrypy.HTTPError(404)
+        except Exception as e:
+            logger.error(str(e))
+            raise cherrypy.HTTPError(500)
+
         return {'privkey': privkey, 'cert': cert, 'chain': chain, 'fullchain': fullchain}
+
+    @cherrypy.expose
+    def keys(self):
+        raise cherrypy.HTTPRedirect('/keys.json', 301) # Moved Permanently
 
     @cherrypy.expose
     def favicon_ico(self):
