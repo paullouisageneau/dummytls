@@ -83,13 +83,6 @@ def listCertificates():
             paths[domains] = os.path.dirname(p)
     return paths
 
-
-def force_tls(self=None):
-    # check if url is in https and redirect if http
-    if cherrypy.request.scheme == "http":
-        raise cherrypy.HTTPRedirect(cherrypy.url().replace("http:", "https:"), status=301)
-
-
 def run(port, index, certpath=''):
     global INDEX_HTML, CERT_PATH
     try:
@@ -129,13 +122,11 @@ def run(port, index, certpath=''):
 
     if port == 443 and naked_domain in paths:
         cert = paths[naked_domain]
-        cherrypy.tools.force_tls = cherrypy.Tool("before_handler", force_tls)
         cherrypy.config.update({
             'server.ssl_module': 'builtin',
             'server.ssl_certificate': os.path.join(cert, "cert.pem"),
             'server.ssl_private_key': os.path.join(cert, "privkey.pem"),
             'server.ssl_certificate_chain': os.path.join(cert, "fullchain.pem"),
-            'tools.force_tls.on': True
         })
 
         # extra server instance to dispatch HTTP
