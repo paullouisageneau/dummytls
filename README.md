@@ -134,7 +134,7 @@ Here's a cron line to run it monthly:
 
 You should fetch the keys remotely before you open your webservice. Keys are valid for three months, but renewed every month. If your service runs continuously for longer than that you should either restart the service or make it poll and replace the keys every 24h or so.
 
-First, make sure you run with `--http-port`. Make an HTTP GET request on `yourdomain.net/keys` and you'll get a JSON with the following key:
+First, make sure you run with `--http-port`. Make an HTTP GET request on `yourdomain.net/keys.json` and you'll get a JSON with the following key:
 
 * `privkey`: the private key.
 * `cert`: the public certificate.
@@ -196,6 +196,5 @@ catch(e) {
 
 # About and credits
 
-* dummytls is a fork of [localtls](https://github.com/Corollarium/localtls), originally developed by [Corollarium](https://corollarium.com) and released under MIT license
-* Inspiration from [nip.io](https://nip.io), [SSLIP](https://sslip.io) and [XIP](http://xip.io/)
-* [Blog post explaining how to generate certificates per server](https://blog.heckel.io/2018/08/05/issuing-lets-encrypt-certificates-for-65000-internal-servers/)
+dummytls is a fork of [localtls](https://github.com/Corollarium/localtls), originally developed by [Corollarium](https://corollarium.com) and released under MIT license. The inspiration orginally comes from [nip.io](https://nip.io), [SSLIP](https://sslip.io), and [XIP](http://xip.io/).
+
